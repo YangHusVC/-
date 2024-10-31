@@ -8,6 +8,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 from PIL import Image #2
 import numpy as np
+from libtiff import TIFF
 
 # ML
 import tensorflow as tf
@@ -28,8 +29,9 @@ from random import shuffle
 from keras.callbacks import CSVLogger, Callback, ModelCheckpoint
 import keras.backend as K
 
-batch_size=8
-outpath=os.path.join(os.getcwd(),'data','S2_unet')
+batch_size=1
+outpath=os.path.join(os.getcwd(),'data','tst_output')
+os.environ['CUDA_VISIBLE_DEVICES']='gpu:0'
 
 class DataGenerator(Sequence):
     """Generates data for Keras"""
@@ -60,9 +62,9 @@ class DataGenerator(Sequence):
         list_IDs_temp = [self.list_IDs[k] for k in indexes]
         
         # Generate data
-        X, y = self.__data_generation(list_IDs_temp)
+        X= self.__data_generation(list_IDs_temp)
 
-        return X, y
+        return X#, y
 
     def on_epoch_end(self):
         'Updates indexes after each epoch'
@@ -101,7 +103,7 @@ class DataGenerator(Sequence):
                 #print (y)
 
 
-        return X, to_categorical(y, num_classes=self.n_classes)
+        return X#, to_categorical(y, num_classes=self.n_classes)
 
 
 class TestS2Unet:
@@ -111,9 +113,9 @@ class TestS2Unet:
         self.data_dir = data_dir
         self.outp_fname = outp_fname
 
-        self.BATCH_SIZE = 2
+        self.BATCH_SIZE = 1
         self.N_CLASSES = 2
-        self.EPOCHS = 40
+        self.EPOCHS = 1
         self.LEARNING_RATE = 1e-7
         self.INPUT_SHAPE = (200,200,14)
 
@@ -123,23 +125,36 @@ class TestS2Unet:
 
     def test(self):
         model=tf.keras.models.load_model(self.outp_fname)
+        '''
         tst_generator = DataGenerator(self.tst_records, 
                                 batch_size=self.BATCH_SIZE, 
                                 dim=self.INPUT_SHAPE, 
                                 n_channels=1,
                                 n_classes=self.N_CLASSES, 
-                                shuffle=True,
-                                augment=True)
-        pv_classes=model.predict_generator(generator=tst_generator, steps=len(tst_generator)/batch_size)
-        np.savez(os.path.join(outpath,'test_outp'+'.npz'), outp = pv_classes)
-        print('Testing output saved:', pv_classes.shape())
+                                shuffle=False,
+                                augment=False)
+        pv_classes=model.predict_generator(generator=tst_generator)
+        '''
+        for i in range(20):
+            IN_SIZE=200
+            tif = TIFF.open(os.path.join(os.getcwd(),'data','trn_input_raw',str(i+1)+'.tif'), mode='r')
+            image_data = tif.read_image()
+            #print(image_data.shape)
+            trn_data=np.pad(image_data,((0,max(IN_SIZE-image_data.shape[0],0)),(0,max(IN_SIZE-image_data.shape[1],0)),(0,0)),'constant',constant_values=(0,0))
+            trn_data=trn_data[0:200,0:200,0:14]
+            X = np.zeros((self.BATCH_SIZE, *self.INPUT_SHAPE))
+            X[0,:,:,:]=trn_data
+            print(X.shape)
+            pv_classes=model.predict(X)
+            np.savez(os.path.join(outpath,'test_outp_'+str(i+1)+'.npz'), outp = pv_classes)
+            print('Testing output saved:', pv_classes.shape)
 
 
 if __name__ == "__main__":
     tst= TestS2Unet(
-        data_dir=os.path.join(os.getcwd(),'data','S2_unet_test'),#not confirmed
+        data_dir=os.path.join(os.getcwd(),'data'),#not confirmed
         outp_fname='s2_unet.h5',
-        tst_records_pickle=os.path.join(os.getcwd(),'data','S2_unet','records.pickle'))
+        tst_records_pickle=os.path.join(os.getcwd(),'data','trn_input_proc','records.pickle'))
     tst.test()
 
 

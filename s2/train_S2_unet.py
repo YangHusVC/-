@@ -39,7 +39,7 @@ logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 
 print ('gpu',tf.test.is_gpu_available())
 
-
+IN_SIZE=200
 #
 class HistPlot(Callback):
     
@@ -55,8 +55,8 @@ class HistPlot(Callback):
         #print (dir(model))
         print (logs)
 
-        Y = np.zeros((200,200,200,2))
-        X = np.zeros((200,200,200,14))
+        Y = np.zeros((200,IN_SIZE,IN_SIZE,2))
+        X = np.zeros((200,IN_SIZE,IN_SIZE,14))
         for ii in range(10):
             #print (ii)
             
@@ -136,6 +136,7 @@ class DataGenerator(Sequence):
         self.indexes = np.arange(len(self.list_IDs))
         if self.shuffle == True:
             np.random.shuffle(self.indexes)
+        #print('one epoch')
 
     def __data_generation(self, list_IDs_temp):
         """
@@ -181,11 +182,11 @@ class TrainS2Unet:
         self.outp_fname = outp_fname
 
         # training parameters
-        self.BATCH_SIZE = 2
+        self.BATCH_SIZE = 1
         self.N_CLASSES = 2
         self.EPOCHS = 40
         self.LEARNING_RATE = 1e-7
-        self.INPUT_SHAPE = (200,200,14)
+        self.INPUT_SHAPE = (IN_SIZE,IN_SIZE,14)
 
         # data records
         self.trn_records = pickle.load(open(trn_records_pickle,'rb'))
@@ -219,7 +220,7 @@ class TrainS2Unet:
                                 n_channels=1,
                                 n_classes=self.N_CLASSES, 
                                 shuffle=True,
-                                augment=True)
+                                augment=False)
 
         val_generator = DataGenerator(self.val_records, 
                                 batch_size=self.BATCH_SIZE, 
@@ -239,15 +240,17 @@ class TrainS2Unet:
                                 validation_data=val_generator, 
                                 verbose=1,  
                                 epochs=self.EPOCHS, 
+                                steps_per_epoch=None,
+                                validation_steps=None,
                                 callbacks=[csv_cb, hist_plot_cb,chkpt_cb])
 
         model.save(self.outp_fname)
 
 if __name__ == "__main__":
     trn = TrainS2Unet(
-        data_dir=os.path.join(os.getcwd(),'data','S2_unet'),
+        data_dir=os.path.join(os.getcwd(),'data'),
         outp_fname='s2_unet.h5',
-        trn_records_pickle=os.path.join(os.getcwd(),'data','S2_unet','records.pickle'))
-    trn.train(os.path.join(os.getcwd(),'solarpv','training','model_resunet.json'))
+        trn_records_pickle=os.path.join(os.getcwd(),'data','trn_input_proc','records.pickle'))
+    trn.train(os.path.join(os.getcwd(),'s2','training','model_resunet.json'))
 
     
